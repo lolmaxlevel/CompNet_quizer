@@ -9,21 +9,25 @@ import GameMode from '../components/GameMode';
 import Tabs from '../components/Tabs';
 import styles from './page.module.css';
 import {convertFdbToTxt} from "@/utils/fdb-to-txt";
+import {useFavorites} from "@/utils/favorites-context";
+import {useIncorrectAnswers} from "@/utils/incorrect-answers-context";
 
 export default function Home() {
     const [activeTab, setActiveTab] = useState('all');
     const [questions, setQuestions] = useState<Question[]>([]);
-    const [groupes, setGroupes] = useState<QuestionGroup[]>([]);
+    const [setGroupes] = useState<QuestionGroup[]>([]);
     const [groupedQuestions, setGroupedQuestions] = useState<Question[]>([]);
     const [examQuestions, setExamQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTest, setSelectedTest] = useState('test1');
+    const {getFavoritesByTest} = useFavorites();
+    const {getIncorrectByTest} = useIncorrectAnswers();
 
     const testOptions = [
-        { id: 'test1', label: 'Тест 1 (2025г)' },
-        { id: 'test2', label: 'Тест 2 (2022г)' },
-        { id: 'test3', label: 'Тест 3 (2022г)' },
-        { id: 'exam', label: 'Экзамен (2022г)' },
+        {id: 'test1', label: 'Тест 1 (2025г)'},
+        {id: 'test2', label: 'Тест 2 (2022г)'},
+        {id: 'test3', label: 'Тест 3 (2022г)'},
+        {id: 'exam', label: 'Экзамен (2022г)'},
     ];
 
     const tabOptions = [
@@ -32,7 +36,17 @@ export default function Home() {
         {id: 'game', label: 'Режим игры'},
         {id: 'game_exam', label: 'Режим теста'},
         {id: 'marathon', label: 'Марафон'},
+        {id: 'favorites', label: 'Избранное'},
+        {id: 'incorrect', label: 'Ошибки'},
     ];
+
+    const favoriteQuestions = questions.filter(question =>
+        getFavoritesByTest(selectedTest).includes(question.id)
+    );
+
+    const incorrectQuestions = questions.filter(question =>
+        getIncorrectByTest(selectedTest).includes(question.id)
+    );
 
     useEffect(() => {
         const fetchData = async () => {
@@ -125,9 +139,10 @@ export default function Home() {
                     <div className={styles.tabContent}>
                         <div className={styles.marathonHeader}>
                             <h2>Режим игры</h2>
-                            <p>Вопросы которые скорее всего будут в тесте, данный режим бесконечный, вопросы могут повторяться</p>
+                            <p>Вопросы которые скорее всего будут в тесте, данный режим бесконечный, вопросы могут
+                                повторяться</p>
                         </div>
-                        <GameMode questions={groupedQuestions}/>
+                        <GameMode questions={groupedQuestions} testId={selectedTest}/>
                     </div>
                     <div className={styles.tabContent}>
                         <div className={styles.marathonHeader}>
@@ -136,14 +151,44 @@ export default function Home() {
                             <p>p.s. при перезагрузке страницы вопросы будут новые</p>
                         </div>
 
-                        <GameMode questions={examQuestions} marathonMode={true}/>
+                        <GameMode questions={examQuestions} marathonMode={true} testId={selectedTest}/>
                     </div>
                     <div className={styles.tabContent}>
                         <div className={styles.marathonHeader}>
                             <h2>Марафон</h2>
                             <p>Режим теста только со всеми вопросами из теста</p>
                         </div>
-                        <GameMode questions={groupedQuestions} marathonMode={true}/>
+                        <GameMode questions={groupedQuestions} marathonMode={true} testId={selectedTest}/>
+                    </div>
+                    <div className={styles.tabContent}>
+                        <div className={styles.marathonHeader}>
+                            <h2>Избранные вопросы</h2>
+                            <p>Марафон только с избранными вопросами для текущего теста</p>
+                        </div>
+                        {favoriteQuestions.length > 0 ? (
+                            <GameMode questions={favoriteQuestions} marathonMode={true} testId={selectedTest}/>
+                        ) : (
+                            <div className={styles.emptyFavorites}>
+                                У вас пока нет избранных вопросов. Добавьте их, нажав на звездочку ★ в режиме игры.
+                            </div>
+                        )}
+                    </div>
+                    <div className={styles.tabContent}>
+                        <div className={styles.marathonHeader}>
+                            <h2>Вопросы с ошибками</h2>
+                            <p>Марафон с вопросами, на которые вы ответили неправильно</p>
+                        </div>
+                        {incorrectQuestions.length > 0 ? (
+                            <GameMode questions={incorrectQuestions}
+                                      marathonMode={true}
+                                      testId={selectedTest}
+                                      isIncorrectMode={true}/>
+                        ) : (
+                            <div className={styles.emptyIncorrect}>
+                                У вас пока нет вопросов с ошибками. Они появятся здесь, если вы ответите неправильно в
+                                режимах игры или марафона.
+                            </div>
+                        )}
                     </div>
                 </Tabs>
             </main>

@@ -3,20 +3,23 @@
 
 import {useState, useEffect, useCallback, useMemo} from 'react';
 import {Question} from '@/utils/types';
-import Image from 'next/image';
 import styles from './GameMode.module.css';
 import QuestionRenderer from './question-types/QuestionRenderer';
 import GameStats from './game-ui/GameStats';
 import GameControls from './game-ui/GameControls';
 import FavoritesManager from './game-ui/FavoritesManager';
 import GameResult from './game-ui/GameResult';
+import {useFavorites} from '@/utils/favorites-context';
+import {useIncorrectAnswers} from '@/utils/incorrect-answers-context';
 
 interface GameModeProps {
     questions: Question[];
     marathonMode?: boolean;
+    testId: string; // Add this prop
+    isIncorrectMode?: boolean; // Add this new prop
 }
 
-export default function GameMode({questions, marathonMode = false}: GameModeProps) {
+export default function GameMode({questions, marathonMode = false, testId, isIncorrectMode = false}: GameModeProps) {
     // Core game state
     const [gameState, setGameState] = useState({
         isLoading: true,
@@ -26,10 +29,13 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
         isCorrect: false
     });
 
+    const {addIncorrect, removeIncorrect, isIncorrect} = useIncorrectAnswers();
     // Question management
     const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
     const [remainingQuestions, setRemainingQuestions] = useState<Question[]>([]);
     const [shuffledAnswers, setShuffledAnswers] = useState<{ answer: any, originalIndex: number }[]>([]);
+
+    const [questionsToRemoveFromIncorrect, setQuestionsToRemoveFromIncorrect] = useState<number[]>([]);
 
     // User answers and progress
     const [userAnswers, setUserAnswers] = useState<any[]>([]);
@@ -40,27 +46,20 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
     });
 
     // Favorites functionality
-    const [favorites, setFavorites] = useState<number[]>([]);
+    const {isFavorite, toggleFavorite, getFavoritesByTest} = useFavorites();
     const [showFavorites, setShowFavorites] = useState(false);
 
-    // Load favorites from localStorage on mount
+    const favorites = useMemo(() => getFavoritesByTest(testId), [getFavoritesByTest, testId]);
+
     useEffect(() => {
-        try {
-            const savedFavorites = localStorage.getItem('favoriteQuestions');
-            if (savedFavorites) {
-                setFavorites(JSON.parse(savedFavorites));
-            }
-        } catch (e) {
-            console.error('Error loading favorites from localStorage', e);
+        if (gameState.isComplete && isIncorrectMode && questionsToRemoveFromIncorrect.length > 0) {
+            // Apply deferred removals when marathon completes
+            questionsToRemoveFromIncorrect.forEach(id => {
+                removeIncorrect(testId, id);
+            });
+            setQuestionsToRemoveFromIncorrect([]);
         }
-
-        setGameState(prev => ({...prev, isLoading: false}));
-    }, []);
-
-    // Save favorites when they change
-    useEffect(() => {
-        localStorage.setItem('favoriteQuestions', JSON.stringify(favorites));
-    }, [favorites]);
+    }, [gameState.isComplete, isIncorrectMode, questionsToRemoveFromIncorrect, removeIncorrect, testId]);
 
     // Initialize game based on mode
     useEffect(() => {
@@ -100,7 +99,20 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
     // Initialize regular mode
     const initializeRegularMode = useCallback(() => {
         const filteredQuestions = getFilteredQuestions();
-        if (filteredQuestions.length === 0) return;
+        if (filteredQuestions.length === 0) {
+            if (showFavorites) {
+                alert('В избранном нет вопросов!');
+                setShowFavorites(false);
+                // Try again with all questions
+                setGameState(prev => ({...prev, isLoading: false}));
+                return;
+            } else {
+                // No questions available at all
+                console.error('No questions available');
+                setGameState(prev => ({...prev, isLoading: false}));
+                return;
+            }
+        }
 
         const randomIndex = Math.floor(Math.random() * filteredQuestions.length);
         const question = filteredQuestions[randomIndex];
@@ -114,6 +126,9 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
                 })).sort(() => Math.random() - 0.5)
             );
         }
+
+        // Add this line to update loading state
+        setGameState(prev => ({...prev, isLoading: false}));
     }, [questions, showFavorites, favorites]);
 
     // Get questions based on favorites filter
@@ -125,15 +140,9 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
     }, [questions, showFavorites, favorites]);
 
     // Toggle favorite status for a question
-    const toggleFavorite = useCallback((questionId: number) => {
-        setFavorites(prev => {
-            if (prev.includes(questionId)) {
-                return prev.filter(id => id !== questionId);
-            } else {
-                return [...prev, questionId];
-            }
-        });
-    }, []);
+    const handleToggleFavorite = useCallback((questionId: number) => {
+        toggleFavorite(testId, questionId);
+    }, [toggleFavorite, testId]);
 
     // Load a new question
     const loadNewQuestion = useCallback((skipped: boolean = false) => {
@@ -272,6 +281,22 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
                 break;
         }
 
+        if (answerIsCorrect) {
+            if (isIncorrectMode && currentQuestion) {
+                // In incorrect mode, just track questions to remove later
+                setQuestionsToRemoveFromIncorrect(prev =>
+                    prev.includes(currentQuestion.id) ? prev : [...prev, currentQuestion.id]
+                );
+            } else if (isIncorrect(testId, currentQuestion?.id || 0)) {
+                // In other modes, remove immediately
+                removeIncorrect(testId, currentQuestion?.id || 0);
+            }
+        } else {
+            // Always add incorrect answers
+            addIncorrect(testId, currentQuestion?.id || 0);
+        }
+
+
         setGameState(prev => ({
             ...prev,
             isCorrect: answerIsCorrect,
@@ -284,6 +309,7 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
             totalAnswered: prev.totalAnswered + 1,
             correctAnswers: prev.correctAnswers + (answerIsCorrect ? 1 : 0)
         }));
+
     }, [currentQuestion, userAnswers]);
 
     // Restart marathon
@@ -341,11 +367,11 @@ export default function GameMode({questions, marathonMode = false}: GameModeProp
                             {currentQuestion.group && ` | Группа: ${currentQuestion.group}`}
                         </div>
                         <button
-                            className={`${styles.favoriteButton} ${favorites.includes(currentQuestion.id) ? styles.favoriteActive : ''}`}
-                            onClick={() => toggleFavorite(currentQuestion.id)}
-                            title={favorites.includes(currentQuestion.id) ? "Удалить из избранного" : "Добавить в избранное"}
+                            className={`${styles.favoriteButton} ${isFavorite(testId, currentQuestion.id) ? styles.favoriteActive : ''}`}
+                            onClick={() => handleToggleFavorite(currentQuestion.id)}
+                            title={isFavorite(testId, currentQuestion.id) ? "Удалить из избранного" : "Добавить в избранное"}
                         >
-                            {favorites.includes(currentQuestion.id) ? "★" : "☆"}
+                            {isFavorite(testId, currentQuestion.id) ? "★" : "☆"}
                         </button>
                     </div>
 
