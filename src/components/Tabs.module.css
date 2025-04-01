@@ -1,0 +1,57 @@
+/* src/components/Tabs.module.css */
+.tabsContainer {
+    width: 100%;
+    margin: 20px 0;
+}
+
+.tabsHeader {
+    display: flex;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px;
+    overflow-y: hidden;
+}
+
+.tabButton {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    font-size: 16px;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    white-space: nowrap;
+}
+
+.tabButton:hover {
+    color: #1a73e8;
+    background-color: rgba(26, 115, 232, 0.04);
+}
+
+.tabButton.active {
+    color: #1a73e8;
+    font-weight: 600;
+}
+
+.tabButton.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: #1a73e8;
+    border-radius: 2px 2px 0 0;
+}
+
+.tabsContent {
+    padding: 10px 0;
+}
+
+@media (max-width: 768px) {
+    .tabButton {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+}
