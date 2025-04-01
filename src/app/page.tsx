@@ -15,7 +15,7 @@ import {useIncorrectAnswers} from "@/utils/incorrect-answers-context";
 export default function Home() {
     const [activeTab, setActiveTab] = useState('all');
     const [questions, setQuestions] = useState<Question[]>([]);
-    const [setGroupes] = useState<QuestionGroup[]>([]);
+    const [groupes, setGroupes] = useState<QuestionGroup[]>([]);
     const [groupedQuestions, setGroupedQuestions] = useState<Question[]>([]);
     const [examQuestions, setExamQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(true);
